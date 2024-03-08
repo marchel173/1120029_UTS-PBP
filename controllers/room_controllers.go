@@ -47,7 +47,7 @@ func GetAllRooms(w http.ResponseWriter, r *http.Request) {
 	if len(rooms) != 0 {
 		response.Status = 200
 		response.Message = "Succes Get Data"
-		response.Data = room
+		response.Data = rooms
 	} else if response.Message == "" {
 		response.Status = 400
 		response.Message = "Data Not Found"
@@ -209,7 +209,7 @@ func UpdateRoom(w http.ResponseWriter, r *http.Request) {
 			room.GameID = prevDatas[0].GameID
 		}
 
-		_, errQuery := db.Exec(`UPDATE rooms SET UserID = ?, ProductID = ?, Quantity = ? WHERE id = ?;`, transaction.UserID, transaction.ProductId, transaction.Quantity, transactionId)
+		_, errQuery := db.Exec(`UPDATE rooms SET Room_Name = ?, id_games = ? WHERE id = ?;`, room.Room_Name, room.GameID, roomid)
 
 		if errQuery == nil {
 			response.Status = 200
