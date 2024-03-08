@@ -10,13 +10,13 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
+func GetAllRooms(w http.ResponseWriter, r *http.Request) {
 	db := connect()
 
 	defer db.Close()
-	var response m.TransactionsResponse
+	var response m.RoomsResponse
 
-	query := "SELECT * FROM transactions"
+	query := "SELECT * FROM rooms"
 	id := r.URL.Query()["id"]
 	if id != nil {
 		query += " WHERE id = " + id[0]
@@ -33,21 +33,21 @@ func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var transaction m.Transaction
-	var transactions []m.Transaction
+	var room m.Room
+	var rooms []m.Room
 
 	for rows.Next() {
-		if err := rows.Scan(&transaction.ID, &transaction.UserID, &transaction.ProductId, &transaction.Quantity); err != nil {
+		if err := rows.Scan(&room.ID, &room.Room_Name, &room.GameID); err != nil {
 			log.Println(err.Error())
 		} else {
-			transactions = append(transactions, transaction)
+			rooms = append(rooms, room)
 		}
 	}
 
-	if len(transactions) != 0 {
+	if len(rooms) != 0 {
 		response.Status = 200
 		response.Message = "Succes Get Data"
-		response.Data = transactions
+		response.Data = room
 	} else if response.Message == "" {
 		response.Status = 400
 		response.Message = "Data Not Found"
@@ -57,7 +57,7 @@ func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-func DeleteTransaction(w http.ResponseWriter, r *http.Request) {
+func LeaveRoom(w http.ResponseWriter, r *http.Request) {
 	db := connect()
 	defer db.Close()
 
@@ -73,13 +73,13 @@ func DeleteTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	transactionId := vars["id"]
-	query, errQuery := db.Exec(`DELETE FROM transactions WHERE id = ?;`, transactionId)
+	roomid := vars["id"]
+	query, errQuery := db.Exec(`DELETE FROM rooms WHERE id = ?;`, roomid)
 	RowsAffected, err := query.RowsAffected()
 
 	if RowsAffected == 0 {
 		response.Status = 400
-		response.Message = "Transaction not found"
+		response.Message = "Room not found"
 		w.WriteHeader(400)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
@@ -101,10 +101,10 @@ func DeleteTransaction(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func InsertTransaction(w http.ResponseWriter, r *http.Request) {
+func InsertRoom(w http.ResponseWriter, r *http.Request) {
 	db := connect()
 	defer db.Close()
-	var response m.TransactionResponse
+	var response m.RoomResponse
 	err := r.ParseForm()
 
 	if err != nil {
@@ -115,13 +115,13 @@ func InsertTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var transaction m.Transaction
+	var room m.Room
 
-	transaction.UserID, _ = strconv.Atoi(r.Form.Get("userid"))
-	transaction.ProductId, _ = strconv.Atoi(r.Form.Get("productid"))
-	transaction.Quantity, _ = strconv.Atoi(r.Form.Get("qty"))
+	room.ID, _ = strconv.Atoi(r.Form.Get("id"))
+	room.Room_Name = r.Form.Get("room_name")
+	room.GameID, _ = strconv.Atoi(r.Form.Get("gameid"))
 
-	rows, errQuery := db.Query("SELECT * FROM products WHERE id=?", transaction.ProductId)
+	rows, errQuery := db.Query("SELECT * FROM games WHERE id=?", room.GameID)
 
 	if errQuery != nil {
 		response.Status = 400
@@ -138,7 +138,7 @@ func InsertTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if i == 0 {
-		_, err = db.Exec("INSERT INTO products (id) VALUES (?)", transaction.ProductId)
+		_, err = db.Exec("INSERT INTO games (id) VALUES (?)", room.GameID)
 
 		if err != nil {
 			response.Status = 400
@@ -149,15 +149,15 @@ func InsertTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	res, errQuery := db.Exec("INSERT INTO transactions (userid, productid, quantity) VALUES (?,?,?)", transaction.UserID, transaction.ProductId, transaction.Quantity)
+	res, errQuery := db.Exec("INSERT INTO room (room_name, id_game) VALUES (?,?,?)", room.ID, room.Room_Name, room.GameID)
 
 	id, err := res.LastInsertId()
 
 	if errQuery == nil {
 		response.Status = 200
 		response.Message = "Success"
-		transaction.ID = int(id)
-		response.Data = transaction
+		room.ID = int(id)
+		response.Data = room
 	} else {
 		response.Status = 400
 		response.Message = "Error Insert Data"
@@ -169,12 +169,12 @@ func InsertTransaction(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func UpdateTransaction(w http.ResponseWriter, r *http.Request) {
+func UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	db := connect()
 	defer db.Close()
 
 	err := r.ParseForm()
-	var response m.TransactionResponse
+	var response m.RoomResponse
 
 	if err != nil {
 		response.Status = 400
@@ -185,19 +185,19 @@ func UpdateTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	transactionId := vars["id"]
+	roomid := vars["id"]
 
-	var transaction m.Transaction
-	transaction.UserID, _ = strconv.Atoi(r.Form.Get("userid"))
-	transaction.ProductId, _ = strconv.Atoi(r.Form.Get("productid"))
-	transaction.Quantity, _ = strconv.Atoi(r.Form.Get("qty"))
+	var room m.Room
+	room.ID, _ = strconv.Atoi(r.Form.Get("id"))
+	room.Room_Name = r.Form.Get("room_name")
+	room.GameID, _ = strconv.Atoi(r.Form.Get("gameid"))
 
-	rows, _ := db.Query("SELECT * FROM transactions WHERE id = ?", transactionId)
-	var prevDatas []m.Transaction
-	var prevData m.Transaction
+	rows, _ := db.Query("SELECT * FROM rooms WHERE id = ?", roomid)
+	var prevDatas []m.Room
+	var prevData m.Room
 
 	for rows.Next() {
-		if err := rows.Scan(&prevData.ID, &prevData.UserID, &prevData.ProductId, &prevData.Quantity); err != nil {
+		if err := rows.Scan(&prevData.ID, &prevData.Room_Name, &prevData.GameID); err != nil {
 			log.Println(err.Error())
 		} else {
 			prevDatas = append(prevDatas, prevData)
@@ -205,24 +205,18 @@ func UpdateTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(prevDatas) > 0 {
-		if transaction.UserID == 0 {
-			transaction.UserID = prevDatas[0].UserID
-		}
-		if transaction.ProductId == 0 {
-			transaction.ProductId = prevDatas[0].ProductId
-		}
-		if transaction.Quantity == 0 {
-			transaction.Quantity = prevDatas[0].Quantity
+		if room.GameID == 0 {
+			room.GameID = prevDatas[0].GameID
 		}
 
-		_, errQuery := db.Exec(`UPDATE transactions SET UserID = ?, ProductID = ?, Quantity = ? WHERE id = ?;`, transaction.UserID, transaction.ProductId, transaction.Quantity, transactionId)
+		_, errQuery := db.Exec(`UPDATE rooms SET UserID = ?, ProductID = ?, Quantity = ? WHERE id = ?;`, transaction.UserID, transaction.ProductId, transaction.Quantity, transactionId)
 
 		if errQuery == nil {
 			response.Status = 200
 			response.Message = "Success Update Data"
-			id, _ := strconv.Atoi(transactionId)
-			transaction.ID = id
-			response.Data = transaction
+			id, _ := strconv.Atoi(roomid)
+			room.ID = id
+			response.Data = room
 			w.WriteHeader(200)
 		} else {
 			response.Status = 400
@@ -242,14 +236,14 @@ func UpdateTransaction(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func GetDetailUserTransaction(w http.ResponseWriter, r *http.Request) {
+func GetDetailAccountRoom(w http.ResponseWriter, r *http.Request) {
 
 	db := connect()
 	defer db.Close()
 
-	var transactionDetails []m.TransactionDetail
+	var roomDetails []m.RoomDetail
 
-	query := "SELECT t.ID , u.ID, u.Name, u.Age, u.Address, p.ID, p.Name, p.Price, t.Quantity FROM transactions t JOIN users u ON t.UserId = u.ID JOIN products p ON p.ID = t.ProductID"
+	query := "SELECT r.ID , a.ID, a.Name, u.Age, u.Address, p.ID, p.Name, p.Price, t.Quantity FROM transactions t JOIN users u ON t.UserId = u.ID JOIN products p ON p.ID = t.ProductID"
 
 	id := r.URL.Query()["id"]
 	if id != nil {
@@ -258,7 +252,7 @@ func GetDetailUserTransaction(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query)
 
-	var response m.TransactionDetailsResponse
+	var response m.RoomDetailsResponse
 
 	if err != nil {
 		response.Status = 400
@@ -269,24 +263,24 @@ func GetDetailUserTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var transactionDetail m.TransactionDetail
-	var user m.User
-	var product m.Product
+	var roomDetail m.RoomDetail
+	var Account m.Account
+	var Game m.Game
 
 	for rows.Next() {
-		if err := rows.Scan(&transactionDetail.ID, &user.ID, &user.Name, &user.Age, &user.Address, &product.ID, &product.Name, &product.Price, &transactionDetail.Quantity); err != nil {
+		if err := rows.Scan(&m.RoomDetail.ID, &Account.ID, &Account.Username, &Game.ID, &Game.Name, &Game.Max_player); err != nil {
 			log.Println(err.Error())
 		} else {
-			transactionDetail.User = user
-			transactionDetail.Product = product
-			transactionDetails = append(transactionDetails, transactionDetail)
+			roomDetail.Account = Account
+			roomDetail.Game = Game
+			roomDetails = append(roomDetails, roomDetail)
 		}
 	}
 
-	if len(transactionDetails) != 0 {
+	if len(roomDetails) != 0 {
 		response.Status = 200
 		response.Message = "Success Get Data"
-		response.Data = transactionDetails
+		response.Data = roomDetails
 	} else {
 		response.Status = 400
 		response.Message = "Error Get Data"
